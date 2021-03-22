@@ -1,71 +1,51 @@
-import streamlit as st
-import pandas as pd
 import json
-import sqlite3
+import pandas as pd
+import streamlit as st
+import requests
 
-db = sqlite3.connect('data.db').cursor()
+api_key = "efee0d94-c0da-4cc5-b77e-e9f7d15243fd"
+headers = {"Api-Key": api_key, "Content-Type": "application/json"}
+store_name = "todo-app"
+store_url = f"https://json.psty.io/api_v1/stores/{store_name}"
 
-def create_table():
-    db.execute("""
-               CREATE TABLE IF NOT EXISTS 
-               todo(name TEXT, category TEXT, duedate DATE)
-               """)
 
-def view_all_todos():
-    db.execute("select * from todo")
-    data = db.fetchall()
+def add_todo(name, date):
+    new_todo = {"name": name, "date": date.strftime("%Y/%m/%d")}
+    data = load_data()
+    data.append(new_todo)
+    res = requests.put(store_url, headers=headers, data=json.dumps(data))
     return data
 
-def add_data(name, category, duedate):
-    data = {
-        "name": name,
-        "category": category,
-        "duedate": duedate.strftime("%Y/%m/%d")
-    }
-    with open("tasts.csv", "a") as f:
-        json.dump(data, f)
-        f.write("\n")
-    # db.execute("insert into todo(name, category, duedate) VALUES (?, ?, ?)", (name, category, duedate))
-    # db.commit()
-    
+
+def load_data():
+    res = requests.get(store_url, headers=headers)
+    data = res.json()["data"]
+    return data
+
 def remove_item(task_name):
     items = []
-    with open("tasts.csv", "r") as f:
-        for line in f:
-            d = json.loads(line)
-            if d["name"] != task_name:
-              items.append(d)
-    
-    with open("tasts.csv", "w") as f:
-        for item in items:
-            json.dump(item, f)
-            f.write("\n")
-    
+    data = load_data()
+    for d in data:
+        if d["name"] != task_name:
+            print(d, data)
+            data.remove(d)
+            break
+    print(data)
+    res = requests.put(store_url, headers=headers, data=json.dumps(data))            
 
-@st.cache
-def load_data():
-    return pd.read_json("tasts.csv", lines=True)
-    
-st.write(
-    """
-    ## TODO App
-    This is a basic Todo App to keep track of my things.         
-    """)
+st.write("# Todo App")
+st.write("List of my Todos")
 
-st.write("## My Todos")
-
-st.title("Add Todo")
-name = st.text_input("name")
-category = st.selectbox("Type", ["School", "Music", "Hobby"])
-date = st.date_input("Due date")
-
+name = st.text_input("Name")
+date = st.date_input("Due Date")
 if st.button("Add Todo"):
-    add_data(name, category, date)
+    add_todo(name, date)
 
-df = load_data()
+st.write("## My Tasks")
+df = pd.DataFrame(load_data())
 st.write(df)
 
-
-done_task = st.selectbox("Tasks", df["name"].values)
-if st.button("Done"):
+st.write("## Mark it Done")
+done_task = st.selectbox("Task", df["name"].values)
+if st.button("Done!"):
     remove_item(done_task)
